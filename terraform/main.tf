@@ -35,3 +35,12 @@ resource "aws_subnet" "public_subnets" {
     Name = "Public Subnet ${count.index + 1}"
   }
 }
+
+// Create Internet Gateway
+resource "aws_internet_gateway" "main_igw" {
+  vpc_id = aws_vpc.main_vpc.id // Attach the IGW to the VPC
+
+  tags = {
+    Name = "Main VPC IG"
+  }
+}
