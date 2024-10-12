@@ -90,16 +90,16 @@ resource "aws_vpc_security_group_egress_rule" "allow_all_traffic_ipv6" {
 
 # EC2 Instances t3.micro in AZ a
 resource "aws_instance" "terraform_instance_a" {
-  ami           = "ami-08eb150f611ca277f" 
+  ami           = "ami-08eb150f611ca277f"
   instance_type = "t3.micro"
-  subnet_id     = aws_subnet.public_subnets[0].id 
   availability_zone = aws_subnet.public_subnets[0].availability_zone
-  security_groups = [aws_security_group.allow_ssh_http.id]
   
-  # Associate the public IP with the instance
-  associate_public_ip_address = true
+  # Attach a network interface instead of directly assigning security groups
+  network_interface {
+    network_interface_id = aws_network_interface.ec2_nic.id
+    device_index         = 0
+  }
 
-  # ssh-keygen -t rsa -b 4096
   user_data = <<EOF
 #!/bin/bash
 echo "Copying the SSH Key to the server"
@@ -108,5 +108,80 @@ EOF
 
   tags = {
     Name = "Terrafom Instance A"
+  }
+}
+
+# Create a network interface to manage security groups separately
+resource "aws_network_interface" "ec2_nic" {
+  subnet_id       = aws_subnet.public_subnets[0].id
+  security_groups = [aws_security_group.allow_ssh_http.id]
+  description     = "Network interface for Terraform Instance A"
+
+  tags = {
+    Name = "EC2 Network Interface"
+  }
+}
+
+# Create Security Group for RDS
+resource "aws_security_group" "rds_sg" {
+  name        = "rds_sg"
+  description = "Allow PostgreSQL traffic only from EC2"
+  vpc_id      = aws_vpc.main_vpc.id
+
+  tags = {
+    Name = "RDS Security Group"
+  }
+}
+
+resource "aws_security_group_rule" "rds_ingress" {
+    type                     = "ingress"
+    from_port                = 5432
+    to_port                  = 5432
+    protocol                 = "tcp"
+    security_group_id        = aws_security_group.rds_sg.id
+    source_security_group_id = aws_security_group.allow_ssh_http.id
+}
+
+# Create RDS Parameter Group
+resource "aws_db_parameter_group" "rds_pg" {
+  name        = "rds-pg-parameter-group"
+  family      = "postgres13"
+  description = "Custom parameter group for PostgreSQL"
+
+  tags = {
+    Name = "PostgreSQL Parameter Group"
+  }
+}
+
+# Create a DB Subnet Group
+resource "aws_db_subnet_group" "rds_subnet_group" {
+  name       = "rds_subnet_group"
+  subnet_ids = aws_subnet.public_subnets[*].id  # the same subnets as the EC2 instances!!!
+
+  tags = {
+    Name = "RDS Subnet Group"
+  }
+}
+
+#RDS PostgreSQL instance
+resource "aws_db_instance" "rds_postgres" {
+  allocated_storage    = 5
+  apply_immediately    = true
+  engine               = "postgres"
+  engine_version       = "13"
+  instance_class       = "db.t4g.micro"
+  db_name              = "TerraFormDB"
+  username             = "tfdbuser"
+  password             = "TFDBPassword123!"
+
+  multi_az             = false                  # Single AZ deployment
+  skip_final_snapshot  = true                   # Skip final snapshot on deletion
+
+  vpc_security_group_ids = [aws_security_group.rds_sg.id]
+  parameter_group_name = aws_db_parameter_group.rds_pg.name 
+  db_subnet_group_name = aws_db_subnet_group.rds_subnet_group.name
+
+  tags = {
+    Name = "RDS Postgres DB"
   }
 }
