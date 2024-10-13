@@ -29,7 +29,9 @@ resource "aws_subnet" "public_subnets" {
   count      = length(var.public_subnet_cidrs)
   vpc_id     = aws_vpc.main_vpc.id
   cidr_block = element(var.public_subnet_cidrs, count.index)
+
   availability_zone = element(var.azs, count.index)
+
   map_public_ip_on_launch = true
 
   tags = {
@@ -116,18 +118,15 @@ resource "aws_instance" "terraform_instance_a" {
   instance_type = "t3.micro"
   subnet_id     = aws_subnet.public_subnets[0].id
   availability_zone = aws_subnet.public_subnets[0].availability_zone
-  
-  # Automatically assign a public IP - w/o Network Interface!!!
-  associate_public_ip_address = true
 
+  associate_public_ip_address = true
   vpc_security_group_ids = [aws_security_group.allow_ssh_http.id]
 
   user_data_replace_on_change = true
-
-  user_data =  file("${path.module}/userdata.sh")
+  user_data = file("${path.module}/userdata.sh")
 
   tags = {
-    Name = "Terrafom Instance A"
+    Name = "Terraform Instance A"
   }
 }
 
@@ -179,8 +178,8 @@ resource "aws_db_instance" "rds_postgres" {
   engine               = "postgres"
   engine_version       = "13"
   instance_class       = "db.t4g.micro"
-  username             = "tfdbuser"
-  password             = "TFDBPassword123!"
+  username             = "postgres" 
+  password             = "password"
 
   multi_az             = false                  # Single AZ deployment
   skip_final_snapshot  = true                   # Skip final snapshot on deletion
