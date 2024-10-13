@@ -8,30 +8,25 @@ sudo apt-get update -y
 # Install necessary packages
 sudo apt-get install -y git golang postgresql nginx
 
-# Start PostgreSQL service
-sudo systemctl start postgresql
-
-# Set up PostgreSQL database and user
-sudo -i -u postgres psql <<-EOSQL
-CREATE DATABASE terraformdb;
-CREATE USER tfdbuser WITH PASSWORD 'TFDBPassword123!';
-GRANT ALL PRIVILEGES ON DATABASE terraformdb TO tfdbuser;
-EOSQL
-
 # Clone the silly-demo application from GitHub
 git clone https://github.com/shefeg/golang-demo /home/ubuntu/golang-demo
 
 # Navigate to the application directory
 cd /home/ubuntu/golang-demo
 
-# Apply the database schema from db_schema.sql
-sudo -i -u postgres psql terraformdb < /home/ubuntu/golang-demo/db_schema.sql
-
 # Build the application
-GOOS=linux GOARCH=amd64 go build -o golang-demo
-chmod +x golang-demo
+sudo GOOS=linux GOARCH=amd64 go build -o golang-demo
+sudo chmod +x golang-demo
+
+# Start PostgreSQL
+sudo systemctl start postgresql
+sudo -u postgres psql < db_schema.sql
+
+# create a user (no need)
+# sudo -u postgres psql -c 'CREATE USER tfdbuser WITH PASSWORD '\''TFDBPassword123!'\'';' # error was here
+# psql -U tfdbuser -d db -h localhost
+
 
 # Start the application with PostgreSQL connection info
-DB_ENDPOINT=localhost DB_PORT=5432 DB_USER=tfdbuser DB_PASS=TFDBPassword123! DB_NAME=terraformdb ./golang-demo &
-
+DB_ENDPOINT=localhost DB_PORT=5432 DB_USER=tfdbuser DB_PASS=TFDBPassword123! DB_NAME=db ./golang-demo
 

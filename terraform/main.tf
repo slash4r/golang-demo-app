@@ -123,6 +123,7 @@ resource "aws_instance" "terraform_instance_a" {
   vpc_security_group_ids = [aws_security_group.allow_ssh_http.id]
 
   user_data_replace_on_change = true
+
   user_data =  file("${path.module}/userdata.sh")
 
   tags = {
@@ -178,7 +179,6 @@ resource "aws_db_instance" "rds_postgres" {
   engine               = "postgres"
   engine_version       = "13"
   instance_class       = "db.t4g.micro"
-  db_name              = "TerraFormDB"
   username             = "tfdbuser"
   password             = "TFDBPassword123!"
 
