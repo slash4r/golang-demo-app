@@ -30,9 +30,10 @@ resource "aws_subnet" "public_subnets" {
   vpc_id     = aws_vpc.main_vpc.id
   cidr_block = element(var.public_subnet_cidrs, count.index)
   availability_zone = element(var.azs, count.index)
+  map_public_ip_on_launch = true
 
   tags = {
-    Name = "Public Subnet ${count.index + 1}"
+    Name = "TerraForm Public Subnet ${count.index + 1}"
   }
 }
 
@@ -43,6 +44,27 @@ resource "aws_internet_gateway" "main_igw" {
   tags = {
     Name = "Main VPC IG"
   }
+}
+
+# Create Route Table
+resource "aws_route_table" "terraform_route_table" {
+  vpc_id = aws_vpc.main_vpc.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main_igw.id
+  }
+
+  tags = {
+    Name = "Terraform Route Table"
+  }
+}
+
+# Associate Route Table with Public Subnets
+resource "aws_route_table_association" "public_subnet_association" {
+  count          = length(aws_subnet.public_subnets)
+  subnet_id      = element(aws_subnet.public_subnets[*].id, count.index)
+  route_table_id = aws_route_table.terraform_route_table.id
 }
 
 # Create Security Group
@@ -92,33 +114,19 @@ resource "aws_vpc_security_group_egress_rule" "allow_all_traffic_ipv6" {
 resource "aws_instance" "terraform_instance_a" {
   ami           = "ami-08eb150f611ca277f"
   instance_type = "t3.micro"
+  subnet_id     = aws_subnet.public_subnets[0].id
   availability_zone = aws_subnet.public_subnets[0].availability_zone
   
-  # Attach a network interface instead of directly assigning security groups
-  network_interface {
-    network_interface_id = aws_network_interface.ec2_nic.id
-    device_index         = 0
-  }
+  # Automatically assign a public IP - w/o Network Interface!!!
+  associate_public_ip_address = true
 
-  user_data = <<EOF
-#!/bin/bash
-echo "Copying the SSH Key to the server"
-echo -e "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCSdhCmNC+wp+FnQS9HR6hDCjyDN+fO/D4GGJ92rkroaes/VR7U6erT4fNlLuIqgG5E4DiKr3yWrwRpooT7w+GYPhXvybaHw6q9bq3VwfbRF+PbVkmDCXEwXZ6sN0nTJCxsCRXs8QYjj3M35e4a0J+feYmkXvcwtY9ZznT6XYqytVju2nbpbdbx9dDI84Duf0zwkiZ/Yl9l77kKAhyY3r2IX8ssILxu9YnyE5/yUdz6jc8C2FdT6xzcd0I2qVJFdw3HhMjB5tnhBi6dGiBSkYxni3oGaM0v4qn25fRdOYRyHoSMGHugjHLySz73CUc7b5G1UdhmMolGNFPRR3MMio6OaxLl5rb4f3sZSqd47rzFE41Jyk51pCqOUiMVjLkWch7dinpBzzRrRznDWxqDrfijqKJLMc4OWfLMMPTydaqb3/qhGordxDw3iwQk+ub1pnB42uqzBC18ev1wp/FcKqo+7Ww7y0fuIjEOw+5P/M3rwQu6aAgH0xALxFjKdlNGrett+AUHq3I1OwywGz+unLz1mPLKn2iddt5qShUjVokhB9yCdGlILrpQgG2IDwxdA8dz7tVOV1ES9Ji7KY/q5exaeIS8taHhZeqF5wOKeoBb6qh6gjtw5B2pT98dm+Oe7wC9wp6G9DiHG47hqnQnLIH5bGXscMd0403fLCIKzx1vgw== dennm@Kомпухтатор"
-EOF
+  vpc_security_group_ids = [aws_security_group.allow_ssh_http.id]
+
+  user_data_replace_on_change = true
+  user_data =  file("${path.module}/userdata.sh")
 
   tags = {
     Name = "Terrafom Instance A"
-  }
-}
-
-# Create a network interface to manage security groups separately
-resource "aws_network_interface" "ec2_nic" {
-  subnet_id       = aws_subnet.public_subnets[0].id
-  security_groups = [aws_security_group.allow_ssh_http.id]
-  description     = "Network interface for Terraform Instance A"
-
-  tags = {
-    Name = "EC2 Network Interface"
   }
 }
 
