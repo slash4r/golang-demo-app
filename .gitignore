@@ -1,1 +1,8 @@
 /golang-demo
+*.exe
+*.hcl
+*.tfstate
+*.backup
+*.info
+*.pub
+terraform/key
