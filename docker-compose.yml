@@ -4,6 +4,14 @@ services:
     container_name: silly-demo-container
     ports:
       - "8080:8080"
+    environment:
+      DB_ENDPOINT: db
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASS: postgres
+      DB_NAME: db
+    depends_on:
+      - db
 
   db:
     image: postgres:13
@@ -29,3 +37,5 @@ services:
 
 volumes:
   pgdata:
+
+# docker-compose up -d
