@@ -10,6 +10,8 @@ services:
       DB_USER: postgres
       DB_PASS: postgres
       DB_NAME: db
+    volumes:
+      - ./:/app    # Mount local source code to /app inside the container
     depends_on:
       - db
 

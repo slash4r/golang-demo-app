@@ -16,6 +16,7 @@ import (
 )
 
 func main() {
+
 	log.SetOutput(os.Stderr)
 	if os.Getenv("DEBUG") == "true" {
 		slog.SetLogLoggerLevel(slog.LevelDebug)

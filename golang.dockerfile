@@ -1,14 +1,18 @@
-# Builder stage
+# Builder stage with CompileDaemon
 FROM golang:1.23 AS builder
 WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+
+RUN go install github.com/githubnemo/CompileDaemon@latest
+
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o golang-demo .
 
 # Final stage
-FROM alpine:latest
+FROM golang:1.23 AS dev
 WORKDIR /app
-COPY --from=builder /app/golang-demo .
-CMD ["./golang-demo"]
 
-# docker build -t golang-demo:latest -f golang.dockerfile .
-# docker run -it --entrypoint sh golang-demo
+COPY --from=builder /go/bin/CompileDaemon /usr/local/bin/CompileDaemon
+COPY --from=builder /app /app
+
+CMD ["CompileDaemon", "--build=go build -o golang-demo .", "--command=./golang-demo", "--exclude-dir=.git", "--exclude-dir=vendor", "--exclude-dir=terraform", "--verbose"]
