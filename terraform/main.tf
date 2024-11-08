@@ -111,22 +111,57 @@ resource "aws_vpc_security_group_egress_rule" "allow_all_traffic_ipv6" {
   cidr_ipv6         = "::/0" # Allow all traffic
   ip_protocol       = "-1" # Allow all traffic
 }
-
-# EC2 Instances t3.micro in AZ a
-resource "aws_instance" "terraform_instance_a" {
-  ami           = "ami-08eb150f611ca277f"
+# --- 1. Launch Template ---
+resource "aws_launch_template" "silly_demo_launch_template" {
+  name          = "silly-demo-launch-template"
+  image_id      = "ami-08eb150f611ca277f"  # Replace with your preferred AMI ID
   instance_type = "t3.micro"
-  subnet_id     = aws_subnet.public_subnets[0].id
-  availability_zone = aws_subnet.public_subnets[0].availability_zone
-
-  associate_public_ip_address = true
   vpc_security_group_ids = [aws_security_group.allow_ssh_http.id]
 
-  user_data_replace_on_change = true
-  user_data = file("${path.module}/userdata.sh")
+  # Base64-encoded user data script for provisioning the instance
+  user_data = base64encode(file("${path.module}/userdata.sh"))
 
-  tags = {
-    Name = "Terraform Instance A"
+  # Block device mappings (root EBS volume configuration)
+  block_device_mappings {
+    device_name = "/dev/xvda"
+    ebs {
+      volume_size = 8
+      volume_type = "gp2"
+    }
+  }
+
+  # Tags for instances launched from this template
+  tag_specifications {
+    resource_type = "instance"
+
+    tags = {
+      Name = "Silly-Demo-Instance"
+    }
+  }
+}
+
+# --- 2. Autoscaling Group ---
+resource "aws_autoscaling_group" "silly_demo_asg" {
+  desired_capacity     = 1
+  max_size             = 2
+  min_size             = 1
+  vpc_zone_identifier  = aws_subnet.public_subnets[*].id  # Use public subnets for accessibility
+
+  # Reference the launch template instead of a launch configuration
+  launch_template {
+    id      = aws_launch_template.silly_demo_launch_template.id
+    version = "$Latest"
+  }
+
+  # Autoscaling group health check
+  health_check_type         = "EC2"  # Can also be "ELB" if connected to a load balancer
+  health_check_grace_period = 300  # 5 minutes
+
+  # Tag each instance launched in the autoscaling group
+  tag {
+    key                 = "Name"
+    value               = "Silly-Demo-Instance"
+    propagate_at_launch = true  # Ensures tags are applied to EC2 instances created by ASG
   }
 }
 
