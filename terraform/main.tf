@@ -111,10 +111,11 @@ resource "aws_vpc_security_group_egress_rule" "allow_all_traffic_ipv6" {
   cidr_ipv6         = "::/0" # Allow all traffic
   ip_protocol       = "-1" # Allow all traffic
 }
+
 # --- 1. Launch Template ---
 resource "aws_launch_template" "silly_demo_launch_template" {
   name          = "silly-demo-launch-template"
-  image_id      = "ami-08eb150f611ca277f"  # Replace with your preferred AMI ID
+  image_id      = "ami-08eb150f611ca277f"
   instance_type = "t3.micro"
   vpc_security_group_ids = [aws_security_group.allow_ssh_http.id]
 
@@ -226,4 +227,61 @@ resource "aws_db_instance" "rds_postgres" {
   tags = {
     Name = "RDS Postgres DB"
   }
+}
+
+# --- 3. Application Load Balancer ---
+resource "aws_lb" "app_lb" {
+  name               = "app-load-balancer"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.allow_ssh_http.id]
+  subnets            = aws_subnet.public_subnets[*].id
+
+  tags = {
+    Name = "Application Load Balancer"
+  }
+}
+
+# --- 4. Target Group ---
+resource "aws_lb_target_group" "app_lb_target_group" {
+  name     = "app-target-group"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.main_vpc.id
+
+  health_check {
+    path                = "/"
+    protocol            = "HTTP"
+    matcher             = "200"  # Expect a 200 OK response for a healthy instance
+    interval            = 30     # Health check interval
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+  }
+
+  tags = {
+    Name = "Target Group for App"
+  }
+}
+
+# --- 5. ALB Listener ---
+resource "aws_lb_listener" "app_lb_listener" {
+  load_balancer_arn = aws_lb.app_lb.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app_lb_target_group.arn
+  }
+
+  tags = {
+    Name = "ALB Listener"
+  }
+}
+
+# --- 6. Attach Target Group to Autoscaling Group ---
+resource "aws_autoscaling_attachment" "asg_attachment" {
+  autoscaling_group_name = aws_autoscaling_group.silly_demo_asg.name
+  alb_target_group_arn   = aws_lb_target_group.app_lb_target_group.arn
 }
